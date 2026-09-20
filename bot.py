@@ -1,7 +1,9 @@
 import os
 import re
-from threading import Thread
+import time
+import threading
 
+import requests
 import telebot
 from flask import Flask
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -16,24 +18,6 @@ if not TOKEN:
 
 bot = telebot.TeleBot(TOKEN)
 
-# ---------- Web server xiqqaa (Render akka hin rafne) ----------
-app = Flask(__name__)
-
-
-@app.route("/")
-def home():
-    return "Bot is running"
-
-
-def health():
-    return "OK"
-
-
-def run_web():
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
-
-
 # ---------- Odeeffannoo Telebirr ----------
 MERCHANT_NAME = "Masher Nesha Wodajo"
 MERCHANT_PHONE = "+251906236951"
@@ -41,6 +25,33 @@ CONTACT_URL = "https://t.me/MasherNesha"
 
 PRICE_10 = "$10 (Kitaaba Page 15 hanga 500 Qabu)"
 PRICE_6 = "$6 (Kitaaba Page 15 Gadi)"
+
+
+# ---------- Akka hin rafneef (Render Free) ----------
+web_app = Flask(__name__)
+
+
+@web_app.route("/")
+def home():
+    return "Bot hojii irra jira ✅"
+
+
+def run_web():
+    port = int(os.environ.get("PORT", 10000))
+    web_app.run(host="0.0.0.0", port=port)
+
+
+def keep_alive():
+    """Daqiiqaa 10 hundaa URL Render ofii ping godha, akka hin rafneef."""
+    url = os.environ.get("RENDER_EXTERNAL_URL")
+    if not url:
+        return
+    while True:
+        time.sleep(600)
+        try:
+            requests.get(url, timeout=15)
+        except Exception:
+            pass
 
 
 # ---------- /start ----------
@@ -74,10 +85,7 @@ def handle_payment_photo(message):
     user = message.from_user
     username = f"@{user.username}" if user.username else "(username hin qabu)"
 
-    bot.reply_to(
-        message,
-        "Suuraa kaffaltii keessan argameera ✅\nDuubatti mirkaneessinee kitaabni isinii ergama. Obsaan eegaa 🙏",
-    )
+    bot.reply_to(message, "Suuraa kaffaltii keessan argameera ✅\nDuubatti mirkaneessinee kitaabni isinii ergama. Obsaan eegaa 🙏")
 
     if not ADMIN_ID:
         return
@@ -101,23 +109,17 @@ def handle_payment_photo(message):
 @bot.callback_query_handler(func=lambda call: call.data.startswith(("ok_", "no_")))
 def handle_decision(call):
     if call.from_user.id != ADMIN_ID:
-        bot.answer_callback_query(call.id, "Hayyama hin qabdan.")
+        bot.answer_callback_query(call.id, "Hayyama hin qabdu.")
         return
 
     action, user_id = call.data.split("_", 1)
     user_id = int(user_id)
 
     if action == "ok":
-        bot.send_message(
-            user_id,
-            "✅ Kaffaltiin keessan mirkanaa'eera! Kitaabni PDF yeroo gabaabaa keessatti isinii ergama. Galatoomaa! 🙏",
-        )
+        bot.send_message(user_id, "✅ Kaffaltiin keessan mirkanaa'eera! Kitaabni PDF yeroo gabaabaa keessatti isinii ergama. Galatoomaa! 🙏")
         status = "✅ Mirkanaa'e"
     else:
-        bot.send_message(
-            user_id,
-            "❌ Kaffaltiin hin mirkanoofne. Maaloo suuraa sirrii ergaa ykn nu quunnamaa: " + CONTACT_URL,
-        )
+        bot.send_message(user_id, "❌ Kaffaltiin hin mirkanoofne. Maaloo suuraa sirrii ergaa ykn nu quunnamaa: " + CONTACT_URL)
         status = "❌ Ni didame"
 
     bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=None)
@@ -135,7 +137,7 @@ def admin_send_pdf(message):
     match = re.search(r"ID:\s*(\d+)", text)
 
     if not match:
-        bot.reply_to(message, "PDF ergachuuf, suuraa kaffaltii irratti Reply godhii ergi.")
+        bot.reply_to(message, "PDF ergachuuf, suuraa kaffaltii irratti *Reply* godhii ergi.", parse_mode="Markdown")
         return
 
     buyer_id = int(match.group(1))
@@ -152,9 +154,8 @@ def echo_all(message):
     )
 
 
-# ---------- Jalqabuu ----------
 if __name__ == "__main__":
-    Thread(target=run_web, daemon=True).start()  # Render akka hin rafne
-    bot.remove_webhook()
     print("Bot-ichi hojii jalqabeera...")
-    bot.infinity_polling(skip_pending=True)
+    threading.Thread(target=run_web, daemon=True).start()
+    threading.Thread(target=keep_alive, daemon=True).start()
+    bot.infinity_polling()
